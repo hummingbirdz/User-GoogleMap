@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>User Job Map</title>
+  <title>User Google Map</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0&display=swap" />
   <style>
     #map { height: 100vh; width: 100%; }
@@ -13,24 +13,25 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      text-shadow: 0 0 1px rgba(0,0,0,0.5); /* optional thin outline for visibility */
     }
   </style>
-  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD-RylSa34BE858N-s7VGpRSYW0gOj0at8&map_ids=67b6ebd01839b65816f4222e&libraries=marker"></script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD-RylSa34BE858N-s7VGpRSYW0gOj0at8&libraries=marker"></script>
 </head>
 <body>
   <div id="map"></div>
   <script>
-    // Parse query parameter to get the signed-in user's email
-    const urlParams = new URLSearchParams(window.location.search);
-    const signedInUserEmail = urlParams.get('userEmail');
+    // Get user email from URL query parameter
+    const params = new URLSearchParams(window.location.search);
+    const signedInUserEmail = params.get("userEmail");
 
     const map = new google.maps.Map(document.getElementById("map"), {
-      center: { lat: 50.737, lng: -3.505 }, // Exeter center
-      zoom: 13
+      center: { lat: 50.737, lng: -3.5 }, // Exeter
+      zoom: 12,
+      mapId: "67b6ebd01839b65816f4222e"
     });
 
     const markers = {};
+    let lastJobIds = new Set();
 
     async function fetchUserJobs() {
       try {
@@ -38,12 +39,22 @@
         const geojson = await response.json();
 
         geojson.features.forEach(feature => {
-          const userEmail = feature.properties.userEmail;
-          if (userEmail !== signedInUserEmail) return; // only show current user's markers
+          // Only process markers for the signed-in user
+          if (feature.properties.userEmail !== signedInUserEmail) return;
 
           const id = feature.properties.address || feature.geometry.coordinates.join(',');
 
-          if (markers[id]) return; // skip duplicate
+          // If icon is "remove-marker", remove the existing marker
+          if (feature.properties.icon === "remove-marker") {
+            if (markers[id]) {
+              markers[id].setMap(null); // remove marker from map
+              delete markers[id];       // remove from dictionary
+              lastJobIds.delete(id);    // remove from lastJobIds to allow reuse if needed
+            }
+            return; // skip creating marker
+          }
+
+          if (lastJobIds.has(id)) return;
 
           const iconName = feature.properties.icon || "place";
           const color = feature.properties.companyColor || "#000000";
@@ -62,16 +73,25 @@
             content: el
           });
 
+          // Add click listener to display popup with address
+          const infoWindow = new google.maps.InfoWindow({
+            content: `<div style="font-family: Arial, sans-serif; font-size: 14px;">${feature.properties.address}</div>`
+          });
+
+          marker.addListener("click", () => {
+            infoWindow.open(map, marker);
+          });
+
           markers[id] = marker;
+          lastJobIds.add(id);
         });
       } catch (e) {
-        console.error("Failed to fetch user jobs:", e);
+        console.error("Failed to fetch jobs:", e);
       }
     }
 
     fetchUserJobs();
-    // Optional: Poll every 3 seconds for new jobs
-    setInterval(fetchUserJobs, 3000);
+    setInterval(fetchUserJobs, 3000); // Refresh every 3 seconds
   </script>
 </body>
 </html>
