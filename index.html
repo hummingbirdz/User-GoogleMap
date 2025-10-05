@@ -48,11 +48,16 @@
 
         geojson.features.forEach(feature => {
           if (feature.properties.userEmail !== signedInUserEmail) return;
+          if (!feature.geometry || !Array.isArray(feature.geometry.coordinates)) return;
+
+          const lng = parseFloat(feature.geometry.coordinates[0]);
+          const lat = parseFloat(feature.geometry.coordinates[1]);
+          if (isNaN(lat) || isNaN(lng)) return; // Skip invalid coordinates
 
           const id = feature.properties.address;
           currentIds.add(id);
 
-          // Handle remove-marker logic
+          // Remove marker logic
           if (feature.properties.icon === "remove-marker") {
             if (markers[id]) {
               markers[id].setMap(null);
@@ -61,11 +66,11 @@
             return;
           }
 
-          const iconName = feature.properties.icon || "place";
-          const color = feature.properties.companyColor || "#000000";
-
           // Create or update marker
           if (!markers[id]) {
+            const iconName = feature.properties.icon || "place";
+            const color = feature.properties.companyColor || "#000000";
+
             const el = document.createElement("div");
             el.className = "material-icon-marker";
             el.style.color = color;
@@ -73,10 +78,7 @@
 
             const marker = new google.maps.marker.AdvancedMarkerElement({
               map,
-              position: {
-                lat: parseFloat(feature.geometry.coordinates[1]),
-                lng: parseFloat(feature.geometry.coordinates[0])
-              },
+              position: { lat, lng },
               content: el
             });
 
@@ -95,13 +97,14 @@
           }
         });
 
-        // Remove markers not present in latest data
+        // Remove any old markers that aren’t in the latest GeoJSON
         for (const id in markers) {
           if (!currentIds.has(id)) {
             markers[id].setMap(null);
             delete markers[id];
           }
         }
+
       } catch (e) {
         console.error("Failed to fetch jobs:", e);
       }
