@@ -33,16 +33,31 @@
     const markers = {};
     let lastJobIds = new Set();
 
+    // Single info window for all markers
+    const infoWindow = new google.maps.InfoWindow();
+
     async function fetchUserJobs() {
       try {
         const response = await fetch("https://script.google.com/macros/s/AKfycbyH7eeJTFdynMfEocpksqzcwgnPSaRchrMPezHBzkW0Hc9VOmHrhAzE1Wc-h8FJWSUC7w/exec");
         const geojson = await response.json();
 
         geojson.features.forEach(feature => {
-          // Only add marker if userEmail matches the signed-in user
+          // Only show jobs for the signed-in user
           if (feature.properties.userEmail !== signedInUserEmail) return;
 
           const id = feature.properties.address || feature.geometry.coordinates.join(',');
+
+          // Handle marker removal first
+          if (feature.properties.icon === "remove-marker") {
+            if (markers[id]) {
+              markers[id].setMap(null);
+              delete markers[id];
+              lastJobIds.delete(id);
+            }
+            return; // Skip creating a marker
+          }
+
+          // Skip if marker already exists
           if (lastJobIds.has(id)) return;
 
           const iconName = feature.properties.icon || "place";
@@ -60,6 +75,16 @@
               lng: parseFloat(feature.geometry.coordinates[0])
             },
             content: el
+          });
+
+          // Add popup showing address
+          marker.addListener("click", () => {
+            infoWindow.setContent(`
+              <div style="font-family: Arial, sans-serif; font-size: 14px;">
+                ${feature.properties.address}
+              </div>
+            `);
+            infoWindow.open(map, marker);
           });
 
           markers[id] = marker;
