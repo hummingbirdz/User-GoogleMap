@@ -14,12 +14,10 @@
       justify-content: center;
       align-items: center;
     }
-    .popup-img {
-      max-width: 200px;
-      max-height: 150px;
-      display: block;
-      margin-top: 5px;
+    .popup-content img {
+      width: 200px;
       border-radius: 8px;
+      margin-top: 6px;
     }
   </style>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD-RylSa34BE858N-s7VGpRSYW0gOj0at8&libraries=marker"></script>
@@ -37,74 +35,75 @@
     });
 
     const markers = {};
-    const infoWindow = new google.maps.InfoWindow();
+    let lastJobIds = new Set();
 
     async function fetchUserJobs() {
       try {
         const response = await fetch("https://script.google.com/macros/s/AKfycbyH7eeJTFdynMfEocpksqzcwgnPSaRchrMPezHBzkW0Hc9VOmHrhAzE1Wc-h8FJWSUC7w/exec");
         const geojson = await response.json();
 
-        const currentIds = new Set();
-
         geojson.features.forEach(feature => {
-          if (feature.properties.userEmail !== signedInUserEmail) return;
-          if (!feature.geometry || !Array.isArray(feature.geometry.coordinates)) return;
+          const props = feature.properties;
+          const coords = feature.geometry.coordinates;
 
-          const lng = parseFloat(feature.geometry.coordinates[0]);
-          const lat = parseFloat(feature.geometry.coordinates[1]);
-          if (isNaN(lat) || isNaN(lng)) return; // Skip invalid coordinates
+          if (!coords || coords.length < 2) return;
 
-          const id = feature.properties.address;
-          currentIds.add(id);
+          const lat = parseFloat(coords[1]);
+          const lng = parseFloat(coords[0]);
+          if (isNaN(lat) || isNaN(lng)) return;
 
-          // Remove marker logic
-          if (feature.properties.icon === "remove-marker") {
+          if (props.userEmail !== signedInUserEmail) return;
+
+          const id = props.address?.trim().toLowerCase();
+          if (!id) return;
+
+          const iconName = (props.icon || "place").toLowerCase();
+          const color = props.companyColor || "#000000";
+
+          // 🔹 First: if this entry is a remove_marker, delete existing marker immediately
+          if (iconName === "remove_marker") {
             if (markers[id]) {
               markers[id].setMap(null);
               delete markers[id];
+              lastJobIds.delete(id);
+              console.log(`Removed marker for ${id}`);
+            } else {
+              console.log(`No existing marker found for ${id} to remove.`);
             }
-            return;
+            return; // Skip creating new marker
           }
 
-          // Create or update marker
-          if (!markers[id]) {
-            const iconName = feature.properties.icon || "place";
-            const color = feature.properties.companyColor || "#000000";
+          // Skip adding duplicate markers
+          if (lastJobIds.has(id)) return;
 
-            const el = document.createElement("div");
-            el.className = "material-icon-marker";
-            el.style.color = color;
-            el.textContent = iconName;
+          // Create visual icon
+          const el = document.createElement("div");
+          el.className = "material-icon-marker";
+          el.style.color = color;
+          el.textContent = props.icon || "place";
 
-            const marker = new google.maps.marker.AdvancedMarkerElement({
-              map,
-              position: { lat, lng },
-              content: el
-            });
+          // Create marker
+          const marker = new google.maps.marker.AdvancedMarkerElement({
+            map,
+            position: { lat, lng },
+            content: el
+          });
 
-            marker.addListener("click", () => {
-              let content = `<div style="font-family: Arial, sans-serif; font-size: 14px;">
-                               <strong>${feature.properties.address}</strong>`;
-              if (feature.properties.photo) {
-                content += `<img src="${feature.properties.photo}" class="popup-img">`;
-              }
-              content += `</div>`;
-              infoWindow.setContent(content);
-              infoWindow.open(map, marker);
-            });
+          // Add popup
+          const info = new google.maps.InfoWindow({
+            content: `
+              <div class="popup-content">
+                <strong>${props.address || "Unknown address"}</strong><br>
+                ${props.photo ? `<img src="${props.photo}" alt="Job photo">` : ""}
+              </div>
+            `
+          });
 
-            markers[id] = marker;
-          }
+          marker.addListener("click", () => info.open(map, marker));
+
+          markers[id] = marker;
+          lastJobIds.add(id);
         });
-
-        // Remove any old markers that aren’t in the latest GeoJSON
-        for (const id in markers) {
-          if (!currentIds.has(id)) {
-            markers[id].setMap(null);
-            delete markers[id];
-          }
-        }
-
       } catch (e) {
         console.error("Failed to fetch jobs:", e);
       }
