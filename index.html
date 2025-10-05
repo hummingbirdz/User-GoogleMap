@@ -2,35 +2,35 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>User Map - Completed Jobs</title>
+  <title>User Job Map</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0&display=swap" />
   <style>
     #map { height: 100vh; width: 100%; }
-    .material-symbols-outlined {
-      font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    .material-icon-marker {
       font-family: 'Material Symbols Outlined';
+      font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
       font-size: 24px;
       display: flex;
       justify-content: center;
       align-items: center;
+      text-shadow: 0 0 1px rgba(0,0,0,0.5); /* optional thin outline for visibility */
     }
   </style>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD-RylSa34BE858N-s7VGpRSYW0gOj0at8&map_ids=67b6ebd01839b65816f4222e&libraries=marker"></script>
 </head>
 <body>
   <div id="map"></div>
-
   <script>
-    const loggedInUserEmail = "greatestateagent@gmail.com"; // For testing
+    // Parse query parameter to get the signed-in user's email
+    const urlParams = new URLSearchParams(window.location.search);
+    const signedInUserEmail = urlParams.get('userEmail');
 
     const map = new google.maps.Map(document.getElementById("map"), {
-      center: { lat: 51.5074, lng: -0.1278 },
-      zoom: 10,
-      mapId: "67b6ebd01839b65816f4222e"
+      center: { lat: 50.737, lng: -3.505 }, // Exeter center
+      zoom: 13
     });
 
     const markers = {};
-    let lastJobIds = new Set();
 
     async function fetchUserJobs() {
       try {
@@ -38,18 +38,18 @@
         const geojson = await response.json();
 
         geojson.features.forEach(feature => {
-          const id = feature.properties.address;
+          const userEmail = feature.properties.userEmail;
+          if (userEmail !== signedInUserEmail) return; // only show current user's markers
 
-          if (lastJobIds.has(id)) return; // skip already-added marker
+          const id = feature.properties.address || feature.geometry.coordinates.join(',');
 
-          // Only show markers for the logged-in user's email
-          if (feature.properties.userEmail !== loggedInUserEmail) return;
+          if (markers[id]) return; // skip duplicate
 
           const iconName = feature.properties.icon || "place";
           const color = feature.properties.companyColor || "#000000";
 
           const el = document.createElement("div");
-          el.className = "material-symbols-outlined";
+          el.className = "material-icon-marker";
           el.style.color = color;
           el.textContent = iconName;
 
@@ -63,17 +63,14 @@
           });
 
           markers[id] = marker;
-          lastJobIds.add(id);
         });
       } catch (e) {
-        console.error("Failed to fetch jobs:", e);
+        console.error("Failed to fetch user jobs:", e);
       }
     }
 
-    // Initial load
     fetchUserJobs();
-
-    // Poll every 3 seconds for new jobs
+    // Optional: Poll every 3 seconds for new jobs
     setInterval(fetchUserJobs, 3000);
   </script>
 </body>
