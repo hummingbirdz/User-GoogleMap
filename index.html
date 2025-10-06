@@ -14,63 +14,55 @@
       justify-content: center;
       align-items: center;
     }
-    .popup-img {
-      max-width: 200px;
-      max-height: 150px;
-      display: block;
-      margin-top: 5px;
-      border-radius: 8px;
-    }
   </style>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD-RylSa34BE858N-s7VGpRSYW0gOj0at8&libraries=marker"></script>
 </head>
 <body>
   <div id="map"></div>
+
   <script>
+    // Get user email from URL query parameter
     const params = new URLSearchParams(window.location.search);
     const signedInUserEmail = params.get("userEmail");
 
+    // Utility to normalise address IDs
+    const normalize = addr => (addr || "").trim().toLowerCase();
+
     const map = new google.maps.Map(document.getElementById("map"), {
-      center: { lat: 50.737, lng: -3.5 },
+      center: { lat: 50.737, lng: -3.5 }, // Exeter
       zoom: 12,
       mapId: "67b6ebd01839b65816f4222e"
     });
 
     const markers = {};
-    const infoWindow = new google.maps.InfoWindow();
 
     async function fetchUserJobs() {
       try {
         const response = await fetch("https://script.google.com/macros/s/AKfycbyH7eeJTFdynMfEocpksqzcwgnPSaRchrMPezHBzkW0Hc9VOmHrhAzE1Wc-h8FJWSUC7w/exec");
         const geojson = await response.json();
 
-        const currentIds = new Set();
-
         geojson.features.forEach(feature => {
-          if (feature.properties.userEmail !== signedInUserEmail) return;
-          if (!feature.geometry || !Array.isArray(feature.geometry.coordinates)) return;
+          const props = feature.properties;
+          if (props.userEmail !== signedInUserEmail) return;
 
-          const lng = parseFloat(feature.geometry.coordinates[0]);
-          const lat = parseFloat(feature.geometry.coordinates[1]);
-          if (isNaN(lat) || isNaN(lng)) return; // Skip invalid coordinates
+          const addressId = normalize(props.address);
+          const iconName = props.icon || "place";
+          const color = props.companyColor || "#000000";
 
-          const id = feature.properties.address;
-          currentIds.add(id);
-
-          // Remove marker logic
-          if (feature.properties.icon === "remove-marker") {
-            if (markers[id]) {
-              markers[id].setMap(null);
-              delete markers[id];
+          // 🧹 Handle REMOVE MARKER
+          if (iconName === "remove_marker") {
+            if (markers[addressId]) {
+              markers[addressId].setMap(null);
+              delete markers[addressId];
+              console.log(`🗑️ Removed marker for: ${props.address}`);
+            } else {
+              console.log(`⚠️ Tried to remove, but no marker found for: ${props.address}`);
             }
-            return;
+            return; // Skip creating new marker
           }
 
-          // Create or update marker
-          if (!markers[id]) {
-            const iconName = feature.properties.icon || "place";
-            const color = feature.properties.companyColor || "#000000";
-
+          // 🆕 Create or update marker
+          if (!markers[addressId]) {
             const el = document.createElement("div");
             el.className = "material-icon-marker";
             el.style.color = color;
@@ -78,40 +70,39 @@
 
             const marker = new google.maps.marker.AdvancedMarkerElement({
               map,
-              position: { lat, lng },
+              position: {
+                lat: parseFloat(feature.geometry.coordinates[1]),
+                lng: parseFloat(feature.geometry.coordinates[0])
+              },
               content: el
             });
 
+            // Add info window
+            const infoWindow = new google.maps.InfoWindow();
             marker.addListener("click", () => {
-              let content = `<div style="font-family: Arial, sans-serif; font-size: 14px;">
-                               <strong>${feature.properties.address}</strong>`;
-              if (feature.properties.photo) {
-                content += `<img src="${feature.properties.photo}" class="popup-img">`;
-              }
-              content += `</div>`;
+              const photoHtml = props.photo
+                ? `<img src="${props.photo}" alt="Job photo" style="width:100%;max-width:200px;border-radius:6px;margin-top:6px;">`
+                : "";
+              const content = `
+                <div style="font-family: Arial, sans-serif; font-size: 14px;">
+                  <strong>${props.address}</strong><br>
+                  ${photoHtml}
+                </div>`;
               infoWindow.setContent(content);
               infoWindow.open(map, marker);
             });
 
-            markers[id] = marker;
+            markers[addressId] = marker;
+            console.log(`📍 Added marker for: ${props.address}`);
           }
         });
-
-        // Remove any old markers that aren’t in the latest GeoJSON
-        for (const id in markers) {
-          if (!currentIds.has(id)) {
-            markers[id].setMap(null);
-            delete markers[id];
-          }
-        }
-
       } catch (e) {
         console.error("Failed to fetch jobs:", e);
       }
     }
 
     fetchUserJobs();
-    setInterval(fetchUserJobs, 3000);
+    setInterval(fetchUserJobs, 3000); // Refresh every 3 seconds
   </script>
 </body>
 </html>
