@@ -5,12 +5,14 @@
   <title>User Google Map</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0&display=swap" />
   <style>
-    #map { height:100vh; width:100%; }
+    #map { height: 100vh; width: 100%; }
     .material-icon-marker {
       font-family: 'Material Symbols Outlined';
       font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
       font-size: 24px;
-      display:flex; justify-content:center; align-items:center;
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
     .popup-img { max-width:200px; max-height:150px; display:block; margin-top:6px; border-radius:6px; }
   </style>
@@ -22,7 +24,7 @@
     const USER_MAP_ID = "67b6ebd01839b658aefa32d3";
     const USER_SHEET_EXEC = "https://script.google.com/macros/s/AKfycbyH7eeJTFdynMfEocpksqzcwgnPSaRchrMPezHBzkW0Hc9VOmHrhAzE1Wc-h8FJWSUC7w/exec";
 
-    // Read signed-in user email from URL
+    // Get signed-in user email from URL
     const params = new URLSearchParams(window.location.search);
     const signedInUserEmail = params.get("userEmail") || "";
 
@@ -34,6 +36,8 @@
 
     const markers = {};
     const infoWindow = new google.maps.InfoWindow();
+
+    // Normalize strings for comparison
     const norm = s => (s || "").toString().trim().toLowerCase();
 
     async function fetchUserJobs() {
@@ -57,7 +61,7 @@
 
           const iconNorm = (props.icon || "").trim().toLowerCase().replace(/_/g, "-");
 
-          // REMOVE marker if icon is remove_marker
+          // Remove marker if icon is "remove-marker"
           if (iconNorm === "remove-marker") {
             if (markers[id]) {
               markers[id].setMap(null);
@@ -73,6 +77,7 @@
             delete markers[id];
           }
 
+          // Create new marker
           const el = document.createElement("div");
           el.className = "material-icon-marker";
           el.style.color = props.companyColor || "#000000";
@@ -84,6 +89,7 @@
             content: el
           });
 
+          // Popup with address + optional photo
           marker.addListener("click", () => {
             const photoHtml = props.photo ? `<img src="${props.photo}" class="popup-img" alt="photo">` : "";
             const html = `<div style="font-family: Arial, sans-serif; font-size:14px;"><strong>${props.address}</strong>${photoHtml}</div>`;
@@ -98,13 +104,11 @@
       }
     }
 
-    // Initial fetch + interval refresh every 3s
+    // Initial fetch + refresh every 3s
     fetchUserJobs();
     setInterval(fetchUserJobs, 3000);
-
   </script>
 
-  <script async
-    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD-RylSa34BE858N-s7VGpRSYW0gOj0at8&callback=initMap&libraries=marker&v=weekly"></script>
+  <script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD-RylSa34BE858N-s7VGpRSYW0gOj0at8&libraries=marker&v=weekly"></script>
 </body>
 </html>
