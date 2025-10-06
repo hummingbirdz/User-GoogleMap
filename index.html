@@ -12,7 +12,13 @@
       font-size: 24px;
       display:flex; justify-content:center; align-items:center;
     }
-    .popup-img { max-width:200px; max-height:150px; display:block; margin-top:6px; border-radius:6px; }
+    .popup-img {
+      max-width:200px;
+      max-height:150px;
+      display:block;
+      margin-top:6px;
+      border-radius:6px;
+    }
   </style>
 </head>
 <body>
@@ -85,8 +91,11 @@
           });
 
           marker.addListener("click", () => {
-            const photoHtml = props.photo ? `<img src="${props.photo}" class="popup-img" alt="photo">` : "";
-            const html = `<div style="font-family: Arial, sans-serif; font-size:14px;"><strong>${props.address}</strong>${photoHtml}</div>`;
+            const photoHtml = props.photo
+              ? `<img src="${props.photo}" class="popup-img" alt="photo">`
+              : "";
+            const html = `<div style="font-family: Arial, sans-serif; font-size:14px;">
+              <strong>${props.address}</strong>${photoHtml}</div>`;
             infoWindow.setContent(html);
             infoWindow.open(map, marker);
           });
@@ -101,10 +110,10 @@
     // Initial fetch + interval refresh every 3s
     fetchUserJobs();
     setInterval(fetchUserJobs, 3000);
-
   </script>
 
   <script async
-    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD-RylSa34BE858N-s7VGpRSYW0gOj0at8&callback=initMap&libraries=marker&v=weekly"></script>
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD-RylSa34BE858N-s7VGpRSYW0gOj0at8&libraries=marker&v=weekly">
+  </script>
 </body>
 </html>
