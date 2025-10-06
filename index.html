@@ -5,20 +5,14 @@
   <title>User Google Map</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0&display=swap" />
   <style>
-    #map { height:100vh; width:100%; }
+    #map { height: 100vh; width: 100%; }
     .material-icon-marker {
       font-family: 'Material Symbols Outlined';
       font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
       font-size: 24px;
-      display:flex; justify-content:center; align-items:center;
+      display: flex; justify-content: center; align-items: center;
     }
-    .popup-img {
-      max-width:200px;
-      max-height:150px;
-      display:block;
-      margin-top:6px;
-      border-radius:6px;
-    }
+    .popup-img { max-width: 200px; max-height: 150px; display: block; margin-top: 6px; border-radius: 6px; }
   </style>
 </head>
 <body>
@@ -32,88 +26,66 @@
     const params = new URLSearchParams(window.location.search);
     const signedInUserEmail = params.get("userEmail") || "";
 
-    const map = new google.maps.Map(document.getElementById("map"), {
-      center: { lat: 50.737, lng: -3.5 },
-      zoom: 12,
-      mapId: USER_MAP_ID
-    });
+    function initMap() {
+      const map = new google.maps.Map(document.getElementById("map"), {
+        center: { lat: 50.737, lng: -3.5 }, // Exeter
+        zoom: 12,
+        mapId: USER_MAP_ID
+      });
 
-    const markers = {};
-    const infoWindow = new google.maps.InfoWindow();
-    const norm = s => (s || "").toString().trim().toLowerCase();
+      const markers = {};
+      const infoWindow = new google.maps.InfoWindow();
+      const norm = s => (s || "").toString().trim().toLowerCase();
 
-    async function fetchUserJobs() {
-      try {
-        const res = await fetch(USER_SHEET_EXEC + "?_=" + Date.now());
-        const geojson = await res.json();
-        if (!geojson || !Array.isArray(geojson.features)) return;
+      async function fetchUserJobs() {
+        try {
+          const res = await fetch(USER_SHEET_EXEC + "?_=" + Date.now());
+          const geojson = await res.json();
+          if (!geojson || !Array.isArray(geojson.features)) return;
 
-        geojson.features.forEach(feature => {
-          const props = feature.properties || {};
-          if ((props.userEmail || "") !== signedInUserEmail) return;
+          geojson.features.forEach(feature => {
+            const props = feature.properties || {};
+            if ((props.userEmail || "") !== signedInUserEmail) return;
 
-          const addressRaw = props.address || "";
-          const id = norm(addressRaw);
-          if (!id) return;
+            const id = props.address || `${feature.geometry.coordinates[1]},${feature.geometry.coordinates[0]}`;
+            if (markers[id]) return; // already on map
 
-          const coords = feature.geometry && feature.geometry.coordinates;
-          const lng = coords && coords[0] ? parseFloat(coords[0]) : NaN;
-          const lat = coords && coords[1] ? parseFloat(coords[1]) : NaN;
-          if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+            const el = document.createElement("div");
+            el.className = "material-icon-marker";
+            el.style.color = props.companyColor || "#000000";
+            el.textContent = props.icon || "place";
 
-          const iconNorm = (props.icon || "").trim().toLowerCase().replace(/_/g, "-");
+            const marker = new google.maps.marker.AdvancedMarkerElement({
+              map,
+              position: {
+                lat: parseFloat(feature.geometry.coordinates[1]),
+                lng: parseFloat(feature.geometry.coordinates[0])
+              },
+              content: el
+            });
 
-          // REMOVE marker if icon is remove_marker
-          if (iconNorm === "remove-marker") {
-            if (markers[id]) {
-              markers[id].setMap(null);
-              delete markers[id];
-              console.log(`🗑 Removed marker for: ${addressRaw}`);
-            }
-            return;
-          }
+            marker.addListener("click", () => {
+              const photoHtml = props.photo ? `<img src="${props.photo}" class="popup-img" alt="photo">` : "";
+              const html = `<div style="font-family: Arial, sans-serif; font-size:14px;"><strong>${props.address}</strong>${photoHtml}</div>`;
+              infoWindow.setContent(html);
+              infoWindow.open(map, marker);
+            });
 
-          // If marker exists, remove old one to replace/update
-          if (markers[id]) {
-            markers[id].setMap(null);
-            delete markers[id];
-          }
-
-          const el = document.createElement("div");
-          el.className = "material-icon-marker";
-          el.style.color = props.companyColor || "#000000";
-          el.textContent = props.icon || "place";
-
-          const marker = new google.maps.marker.AdvancedMarkerElement({
-            map,
-            position: { lat, lng },
-            content: el
+            markers[id] = marker;
           });
-
-          marker.addListener("click", () => {
-            const photoHtml = props.photo
-              ? `<img src="${props.photo}" class="popup-img" alt="photo">`
-              : "";
-            const html = `<div style="font-family: Arial, sans-serif; font-size:14px;">
-              <strong>${props.address}</strong>${photoHtml}</div>`;
-            infoWindow.setContent(html);
-            infoWindow.open(map, marker);
-          });
-
-          markers[id] = marker;
-        });
-      } catch (err) {
-        console.error("Failed to fetch jobs:", err);
+        } catch (e) {
+          console.error("Failed to fetch jobs:", e);
+        }
       }
-    }
 
-    // Initial fetch + interval refresh every 3s
-    fetchUserJobs();
-    setInterval(fetchUserJobs, 3000);
+      // Initial fetch + refresh every 3 seconds
+      fetchUserJobs();
+      setInterval(fetchUserJobs, 3000);
+    }
   </script>
 
   <script async
-    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD-RylSa34BE858N-s7VGpRSYW0gOj0at8&libraries=marker&v=weekly">
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD-RylSa34BE858N-s7VGpRSYW0gOj0at8&callback=initMap&libraries=marker&v=weekly">
   </script>
 </body>
 </html>
