@@ -10,107 +10,92 @@
       font-family: 'Material Symbols Outlined';
       font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
       font-size: 24px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
+      display: flex; justify-content: center; align-items: center;
     }
-    .popup-content img {
-      width: 200px;
-      border-radius: 8px;
-      margin-top: 6px;
-    }
+    .popup-img { max-width: 200px; max-height: 150px; display: block; margin-top: 6px; border-radius: 6px; }
   </style>
-  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD-RylSa34BE858N-s7VGpRSYW0gOj0at8&libraries=marker"></script>
 </head>
 <body>
   <div id="map"></div>
+
   <script>
+    const USER_MAP_ID = "67b6ebd01839b658aefa32d3";
+    const USER_SHEET_EXEC = "https://script.google.com/macros/s/AKfycbyH7eeJTFdynMfEocpksqzcwgnPSaRchrMPezHBzkW0Hc9VOmHrhAzE1Wc-h8FJWSUC7w/exec";
+
+    // Read signed-in user email from URL
     const params = new URLSearchParams(window.location.search);
-    const signedInUserEmail = params.get("userEmail");
+    const signedInUserEmail = params.get("userEmail") || "";
 
-    const map = new google.maps.Map(document.getElementById("map"), {
-      center: { lat: 50.737, lng: -3.5 },
-      zoom: 12,
-      mapId: "67b6ebd01839b65816f4222e"
-    });
+    function initMap() {
+      const map = new google.maps.Map(document.getElementById("map"), {
+        center: { lat: 50.737, lng: -3.5 }, // Exeter
+        zoom: 12,
+        mapId: USER_MAP_ID
+      });
 
-    const markers = {};
-    let lastJobIds = new Set();
+      const markers = {};
+      const infoWindow = new google.maps.InfoWindow();
+      const norm = s => (s || "").toString().trim().toLowerCase();
 
-    async function fetchUserJobs() {
-      try {
-        const response = await fetch("https://script.google.com/macros/s/AKfycbyH7eeJTFdynMfEocpksqzcwgnPSaRchrMPezHBzkW0Hc9VOmHrhAzE1Wc-h8FJWSUC7w/exec");
-        const geojson = await response.json();
+      async function fetchUserJobs() {
+        try {
+          const res = await fetch(USER_SHEET_EXEC + "?_=" + Date.now());
+          const geojson = await res.json();
+          if (!geojson || !Array.isArray(geojson.features)) return;
 
-        geojson.features.forEach(feature => {
-          const props = feature.properties;
-          const coords = feature.geometry.coordinates;
+          geojson.features.forEach(feature => {
+            const props = feature.properties || {};
+            if ((props.userEmail || "") !== signedInUserEmail) return;
 
-          if (!coords || coords.length < 2) return;
+            const id = props.address || `${feature.geometry.coordinates[1]},${feature.geometry.coordinates[0]}`;
 
-          const lat = parseFloat(coords[1]);
-          const lng = parseFloat(coords[0]);
-          if (isNaN(lat) || isNaN(lng)) return;
-
-          if (props.userEmail !== signedInUserEmail) return;
-
-          const id = props.address?.trim().toLowerCase();
-          if (!id) return;
-
-          const iconName = (props.icon || "place").toLowerCase();
-          const color = props.companyColor || "#000000";
-
-          // 🔹 First: if this entry is a remove_marker, delete existing marker immediately
-          if (iconName === "remove_marker") {
-            if (markers[id]) {
-              markers[id].setMap(null);
-              delete markers[id];
-              lastJobIds.delete(id);
-              console.log(`Removed marker for ${id}`);
-            } else {
-              console.log(`No existing marker found for ${id} to remove.`);
+            // 🟨 NEW LOGIC: Handle remove-icon first
+            if (props.icon && props.icon.trim().toLowerCase() === "remove-icon") {
+              if (markers[id]) {
+                markers[id].map = null; // remove from map
+                delete markers[id];
+              }
+              return; // skip creating a marker
             }
-            return; // Skip creating new marker
-          }
 
-          // Skip adding duplicate markers
-          if (lastJobIds.has(id)) return;
+            if (markers[id]) return; // already on map
 
-          // Create visual icon
-          const el = document.createElement("div");
-          el.className = "material-icon-marker";
-          el.style.color = color;
-          el.textContent = props.icon || "place";
+            const el = document.createElement("div");
+            el.className = "material-icon-marker";
+            el.style.color = props.companyColor || "#000000";
+            el.textContent = props.icon || "place";
 
-          // Create marker
-          const marker = new google.maps.marker.AdvancedMarkerElement({
-            map,
-            position: { lat, lng },
-            content: el
+            const marker = new google.maps.marker.AdvancedMarkerElement({
+              map,
+              position: {
+                lat: parseFloat(feature.geometry.coordinates[1]),
+                lng: parseFloat(feature.geometry.coordinates[0])
+              },
+              content: el
+            });
+
+            marker.addListener("click", () => {
+              const photoHtml = props.photo ? `<img src="${props.photo}" class="popup-img" alt="photo">` : "";
+              const html = `<div style="font-family: Arial, sans-serif; font-size:14px;"><strong>${props.address}</strong>${photoHtml}</div>`;
+              infoWindow.setContent(html);
+              infoWindow.open(map, marker);
+            });
+
+            markers[id] = marker;
           });
-
-          // Add popup
-          const info = new google.maps.InfoWindow({
-            content: `
-              <div class="popup-content">
-                <strong>${props.address || "Unknown address"}</strong><br>
-                ${props.photo ? `<img src="${props.photo}" alt="Job photo">` : ""}
-              </div>
-            `
-          });
-
-          marker.addListener("click", () => info.open(map, marker));
-
-          markers[id] = marker;
-          lastJobIds.add(id);
-        });
-      } catch (e) {
-        console.error("Failed to fetch jobs:", e);
+        } catch (e) {
+          console.error("Failed to fetch jobs:", e);
+        }
       }
-    }
 
-    fetchUserJobs();
-    setInterval(fetchUserJobs, 3000);
+      // Initial fetch + refresh every 3 seconds
+      fetchUserJobs();
+      setInterval(fetchUserJobs, 3000);
+    }
+  </script>
+
+  <script async
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD-RylSa34BE858N-s7VGpRSYW0gOj0at8&callback=initMap&libraries=marker&v=weekly">
   </script>
 </body>
 </html>
