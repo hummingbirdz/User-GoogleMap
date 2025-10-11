@@ -10,11 +10,15 @@
       font-family: 'Material Symbols Outlined';
       font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
       font-size: 24px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
+      display: flex; justify-content: center; align-items: center;
     }
-    .popup-img { max-width:200px; max-height:150px; display:block; margin-top:6px; border-radius:6px; }
+    .popup-img {
+      max-width: 200px;
+      max-height: 150px;
+      display: block;
+      margin-top: 6px;
+      border-radius: 6px;
+    }
   </style>
 </head>
 <body>
@@ -24,91 +28,105 @@
     const USER_MAP_ID = "67b6ebd01839b658aefa32d3";
     const USER_SHEET_EXEC = "https://script.google.com/macros/s/AKfycbyH7eeJTFdynMfEocpksqzcwgnPSaRchrMPezHBzkW0Hc9VOmHrhAzE1Wc-h8FJWSUC7w/exec";
 
-    // Get signed-in user email from URL
+    // Read signed-in user email from URL
     const params = new URLSearchParams(window.location.search);
     const signedInUserEmail = params.get("userEmail") || "";
 
-    const map = new google.maps.Map(document.getElementById("map"), {
-      center: { lat: 50.737, lng: -3.5 },
-      zoom: 12,
-      mapId: USER_MAP_ID
-    });
+    function initMap() {
+      const map = new google.maps.Map(document.getElementById("map"), {
+        center: { lat: 50.737, lng: -3.5 }, // Exeter
+        zoom: 12,
+        mapId: USER_MAP_ID
+      });
 
-    const markers = {};
-    const infoWindow = new google.maps.InfoWindow();
+      const markers = {};
+      const infoWindow = new google.maps.InfoWindow();
+      const norm = s => (s || "").toString().trim().toLowerCase();
 
-    // Normalize strings for comparison
-    const norm = s => (s || "").toString().trim().toLowerCase();
+      async function fetchUserJobs() {
+        try {
+          const res = await fetch(USER_SHEET_EXEC + "?_=" + Date.now());
+          const geojson = await res.json();
+          if (!geojson || !Array.isArray(geojson.features)) return;
 
-    async function fetchUserJobs() {
-      try {
-        const res = await fetch(USER_SHEET_EXEC + "?_=" + Date.now());
-        const geojson = await res.json();
-        if (!geojson || !Array.isArray(geojson.features)) return;
+          geojson.features.forEach(feature => {
+            const props = feature.properties || {};
+            if ((props.userEmail || "") !== signedInUserEmail) return;
 
-        geojson.features.forEach(feature => {
-          const props = feature.properties || {};
-          if ((props.userEmail || "") !== signedInUserEmail) return;
+            const id = props.address || `${feature.geometry.coordinates[1]},${feature.geometry.coordinates[0]}`;
 
-          const addressRaw = props.address || "";
-          const id = norm(addressRaw);
-          if (!id) return;
-
-          const coords = feature.geometry && feature.geometry.coordinates;
-          const lng = coords && coords[0] ? parseFloat(coords[0]) : NaN;
-          const lat = coords && coords[1] ? parseFloat(coords[1]) : NaN;
-          if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-
-          const iconNorm = (props.icon || "").trim().toLowerCase().replace(/_/g, "-");
-
-          // Remove marker if icon is "remove-marker"
-          if (iconNorm === "remove-marker") {
-            if (markers[id]) {
-              markers[id].setMap(null);
-              delete markers[id];
-              console.log(`🗑 Removed marker for: ${addressRaw}`);
+            // 🟠 Remove-icon logic
+            if (props.icon && norm(props.icon) === "remove-icon") {
+              if (markers[id]) {
+                markers[id].map = null;
+                delete markers[id];
+              }
+              return;
             }
-            return;
-          }
 
-          // If marker exists, remove old one to replace/update
-          if (markers[id]) {
-            markers[id].setMap(null);
-            delete markers[id];
-          }
+            // 🟢 Update existing marker (icon + photo)
+            if (markers[id]) {
+              const el = markers[id].content;
+              el.textContent = props.icon || "place";
 
-          // Create new marker
-          const el = document.createElement("div");
-          el.className = "material-icon-marker";
-          el.style.color = props.companyColor || "#000000";
-          el.textContent = props.icon || "place";
+              // Store latest photo in marker for popup refresh
+              markers[id].photo = props.photo || "";
 
-          const marker = new google.maps.marker.AdvancedMarkerElement({
-            map,
-            position: { lat, lng },
-            content: el
+              // Update the click handler so popup uses the new photo
+              google.maps.event.clearListeners(markers[id], "click");
+              markers[id].addListener("click", () => {
+                const photoHtml = markers[id].photo
+                  ? `<img src="${markers[id].photo}" class="popup-img" alt="photo">`
+                  : "";
+                const html = `<div style="font-family: Arial, sans-serif; font-size:14px;"><strong>${props.address}</strong>${photoHtml}</div>`;
+                infoWindow.setContent(html);
+                infoWindow.open(map, markers[id]);
+              });
+              return;
+            }
+
+            // 🟦 Create new marker
+            const el = document.createElement("div");
+            el.className = "material-icon-marker";
+            el.style.color = props.companyColor || "#000000";
+            el.textContent = props.icon || "place";
+
+            const marker = new google.maps.marker.AdvancedMarkerElement({
+              map,
+              position: {
+                lat: parseFloat(feature.geometry.coordinates[1]),
+                lng: parseFloat(feature.geometry.coordinates[0])
+              },
+              content: el
+            });
+
+            // Attach photo reference for future updates
+            marker.photo = props.photo || "";
+
+            marker.addListener("click", () => {
+              const photoHtml = marker.photo
+                ? `<img src="${marker.photo}" class="popup-img" alt="photo">`
+                : "";
+              const html = `<div style="font-family: Arial, sans-serif; font-size:14px;"><strong>${props.address}</strong>${photoHtml}</div>`;
+              infoWindow.setContent(html);
+              infoWindow.open(map, marker);
+            });
+
+            markers[id] = marker;
           });
-
-          // Popup with address + optional photo
-          marker.addListener("click", () => {
-            const photoHtml = props.photo ? `<img src="${props.photo}" class="popup-img" alt="photo">` : "";
-            const html = `<div style="font-family: Arial, sans-serif; font-size:14px;"><strong>${props.address}</strong>${photoHtml}</div>`;
-            infoWindow.setContent(html);
-            infoWindow.open(map, marker);
-          });
-
-          markers[id] = marker;
-        });
-      } catch (err) {
-        console.error("Failed to fetch jobs:", err);
+        } catch (e) {
+          console.error("Failed to fetch jobs:", e);
+        }
       }
-    }
 
-    // Initial fetch + refresh every 3s
-    fetchUserJobs();
-    setInterval(fetchUserJobs, 3000);
+      // Initial fetch + refresh every 3 seconds
+      fetchUserJobs();
+      setInterval(fetchUserJobs, 3000);
+    }
   </script>
 
-  <script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD-RylSa34BE858N-s7VGpRSYW0gOj0at8&libraries=marker&v=weekly"></script>
+  <script async
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD-RylSa34BE858N-s7VGpRSYW0gOj0at8&callback=initMap&libraries=marker&v=weekly">
+  </script>
 </body>
 </html>
