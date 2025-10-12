@@ -1,52 +1,69 @@
-<script>
-  const USER_MAP_ID = "67b6ebd01839b658aefa32d3";
-  const USER_SHEET_EXEC = "https://script.google.com/macros/s/AKfycbyH7eeJTFdynMfEocpksqzcwgnPSaRchrMPezHBzkW0Hc9VOmHrhAzE1Wc-h8FJWSUC7w/exec";
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>User Google Map</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0&display=swap" />
+  <style>
+    #map { height: 100vh; width: 100%; }
+    .material-icon-marker {
+      font-family: 'Material Symbols Outlined';
+      font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      font-size: 24px;
+      display: flex; justify-content: center; align-items: center;
+    }
+    .popup-img { max-width: 200px; max-height: 150px; display: block; margin-top: 6px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
 
-  const params = new URLSearchParams(window.location.search);
-  const signedInUserEmail = params.get("userEmail") || "";
+  <script>
+    const USER_MAP_ID = "67b6ebd01839b658aefa32d3";
+    const USER_SHEET_EXEC = "https://script.google.com/macros/s/AKfycbyH7eeJTFdynMfEocpksqzcwgnPSaRchrMPezHBzkW0Hc9VOmHrhAzE1Wc-h8FJWSUC7w/exec";
 
-  function initMap() {
-    const map = new google.maps.Map(document.getElementById("map"), {
-      center: { lat: 50.737, lng: -3.5 },
-      zoom: 12,
-      mapId: USER_MAP_ID
-    });
+    // Read signed-in user email from URL
+    const params = new URLSearchParams(window.location.search);
+    const signedInUserEmail = params.get("userEmail") || "";
 
-    const markers = {};
-    const infoWindow = new google.maps.InfoWindow();
+    function initMap() {
+      const map = new google.maps.Map(document.getElementById("map"), {
+        center: { lat: 50.737, lng: -3.5 }, // Exeter
+        zoom: 12,
+        mapId: USER_MAP_ID
+      });
 
-    async function fetchUserJobs() {
-      try {
-        const res = await fetch(USER_SHEET_EXEC + "?_=" + Date.now());
-        const geojson = await res.json();
-        if (!geojson || !Array.isArray(geojson.features)) return;
+      const markers = {};
+      const infoWindow = new google.maps.InfoWindow();
 
-        const seen = new Set();
+      async function fetchUserJobs() {
+        try {
+          const res = await fetch(USER_SHEET_EXEC + "?_=" + Date.now());
+          const geojson = await res.json();
+          if (!geojson || !Array.isArray(geojson.features)) return;
 
-        geojson.features.forEach(feature => {
-          const props = feature.properties || {};
-          if ((props.userEmail || "") !== signedInUserEmail) return;
+          geojson.features.forEach(feature => {
+            const props = feature.properties || {};
+            if ((props.userEmail || "") !== signedInUserEmail) return;
 
-          const id = props.address;
-          seen.add(id);
+            const id = props.address || `${feature.geometry.coordinates[1]},${feature.geometry.coordinates[0]}`;
 
-          const icon = props.icon || "place";
-          const color = props.companyColor || "#000000";
-          const photo = props.photo || "";
-
-          if (markers[id]) {
-            // Update icon and photo if marker already exists
-            const el = markers[id].content;
-            if (el.textContent !== icon) {
-              el.textContent = icon;
+            // 🟨 Remove marker if remove-icon
+            if ((props.icon || "").trim().toLowerCase() === "remove-icon") {
+              if (markers[id]) {
+                markers[id].setMap(null); // correct removal
+                delete markers[id];
+                console.log(`🗑 Removed marker for: ${props.address}`);
+              }
+              return; // skip creating a new marker
             }
-            markers[id].photo = photo; // store photo for click popup
-          } else {
-            // Create new marker
+
+            if (markers[id]) return; // already on map
+
             const el = document.createElement("div");
             el.className = "material-icon-marker";
-            el.style.color = color;
-            el.textContent = icon;
+            el.style.color = props.companyColor || "#000000";
+            el.textContent = props.icon || "place";
 
             const marker = new google.maps.marker.AdvancedMarkerElement({
               map,
@@ -57,33 +74,28 @@
               content: el
             });
 
-            marker.photo = photo; // store photo for click popup
-
             marker.addListener("click", () => {
-              const photoHtml = marker.photo ? `<img src="${marker.photo}" class="popup-img" alt="photo">` : "";
-              const html = `<div style="font-family: Arial, sans-serif; font-size:14px;"><strong>${id}</strong>${photoHtml}</div>`;
+              const photoHtml = props.photo ? `<img src="${props.photo}" class="popup-img" alt="photo">` : "";
+              const html = `<div style="font-family: Arial, sans-serif; font-size:14px;"><strong>${props.address}</strong>${photoHtml}</div>`;
               infoWindow.setContent(html);
               infoWindow.open(map, marker);
             });
 
             markers[id] = marker;
-          }
-        });
-
-        // Optional cleanup: remove markers no longer in the sheet
-        for (const id in markers) {
-          if (!seen.has(id)) {
-            markers[id].setMap(null);
-            delete markers[id];
-          }
+          });
+        } catch (e) {
+          console.error("Failed to fetch jobs:", e);
         }
-
-      } catch (e) {
-        console.error("Failed to fetch jobs:", e);
       }
-    }
 
-    fetchUserJobs();
-    setInterval(fetchUserJobs, 3000);
-  }
-</script>
+      // Initial fetch + refresh every 3 seconds
+      fetchUserJobs();
+      setInterval(fetchUserJobs, 3000);
+    }
+  </script>
+
+  <script async
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD-RylSa34BE858N-s7VGpRSYW0gOj0at8&callback=initMap&libraries=marker&v=weekly">
+  </script>
+</body>
+</html>
