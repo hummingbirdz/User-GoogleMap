@@ -48,18 +48,16 @@
 
             const id = props.address || `${feature.geometry.coordinates[1]},${feature.geometry.coordinates[0]}`;
 
-            // 🟨 Remove marker if remove-icon
-            if ((props.icon || "").trim().toLowerCase() === "remove-icon") {
-              if (markers[id]) {
-                markers[id].setMap(null); // correct removal
-                delete markers[id];
-                console.log(`🗑 Removed marker for: ${props.address}`);
-              }
+            // ✅ Removed remove-icon logic completely
+
+            // If marker already exists, update its icon and photo
+            if (markers[id]) {
+              markers[id].content.textContent = props.icon || "place";
+              markers[id].photo = props.photo || "";
               return; // skip creating a new marker
             }
 
-            if (markers[id]) return; // already on map
-
+            // Create new marker if it doesn't exist
             const el = document.createElement("div");
             el.className = "material-icon-marker";
             el.style.color = props.companyColor || "#000000";
@@ -74,8 +72,10 @@
               content: el
             });
 
+            marker.photo = props.photo || "";
+
             marker.addListener("click", () => {
-              const photoHtml = props.photo ? `<img src="${props.photo}" class="popup-img" alt="photo">` : "";
+              const photoHtml = marker.photo ? `<img src="${marker.photo}" class="popup-img" alt="photo">` : "";
               const html = `<div style="font-family: Arial, sans-serif; font-size:14px;"><strong>${props.address}</strong>${photoHtml}</div>`;
               infoWindow.setContent(html);
               infoWindow.open(map, marker);
