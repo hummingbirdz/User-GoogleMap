@@ -74,13 +74,23 @@
               content: el
             });
 
-            marker.photo = props.photo || "";
-
             marker.addListener("click", () => {
-              const photoHtml = marker.photo ? `<img src="${marker.photo}" class="popup-img" alt="photo">` : "";
-              const html = `<div style="font-family: Arial, sans-serif; font-size:14px;"><strong>${props.address}</strong>${photoHtml}</div>`;
-              infoWindow.setContent(html);
-              infoWindow.open(map, marker);
+  const photoHtml = marker.photo 
+    ? `<div style="margin-bottom: 8px;"><img src="${marker.photo}" class="popup-img" alt="photo" style="max-width: 100%; border: 1px solid #ccc; border-radius: 4px;"></div>` 
+    : "";
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; padding: 6px;">
+      ${photoHtml}
+      <strong>${props.address}</strong><br>
+      <em>${props.jobType}</em><br>
+      ${props.notes ? `<strong>Notes:</strong> ${props.notes}<br>` : ""}
+      ${props.what3words ? `<strong>W3W:</strong> ${props.what3words}<br>` : ""}
+    </div>
+  `;
+
+  infoWindow.setContent(html);
+  infoWindow.open(map, marker);
             });
 
             markers[id] = marker;
