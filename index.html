@@ -14,7 +14,13 @@
       color: inherit;
       -webkit-text-stroke: 0.50px #222;
     }
-    .popup-img { max-width: 200px; max-height: 150px; display: block; margin-top: 6px; border-radius: 6px; }
+    .popup-img {
+      max-width: 200px;
+      max-height: 150px;
+      display: block;
+      margin-top: 6px;
+      border-radius: 6px;
+    }
   </style>
 </head>
 <body>
@@ -50,16 +56,14 @@
 
             const id = props.address || `${feature.geometry.coordinates[1]},${feature.geometry.coordinates[0]}`;
 
-            // ✅ Removed remove-icon logic completely
-
-            // If marker already exists, update its icon and photo
+            // 🔧 CHANGE 1: If a marker already exists for this address,
+            // remove it so the new row is treated as a brand-new job
             if (markers[id]) {
-              markers[id].content.textContent = props.icon || "place";
-              markers[id].photo = props.photo || "";
-              return; // skip creating a new marker
+              markers[id].map = null;
+              delete markers[id];
             }
 
-            // Create new marker if it doesn't exist
+            // Create new marker
             const el = document.createElement("span");
             el.className = "material-icon-marker";
             el.style.color = props.companyColor || "#000000";
@@ -77,8 +81,22 @@
             marker.photo = props.photo || "";
 
             marker.addListener("click", () => {
-              const photoHtml = marker.photo ? `<img src="${marker.photo}" class="popup-img" alt="photo">` : "";
-              const html = `<div style="font-family: Arial, sans-serif; font-size:14px;"><strong>${props.address}</strong>${photoHtml}</div>`;
+              const photoHtml = marker.photo
+                ? `<div style="margin-bottom: 8px;">
+                     <img src="${marker.photo}?v=${Date.now()}" class="popup-img" alt="photo" style="max-width: 100%; border: 1px solid #ccc; border-radius: 4px;">
+                   </div>` // 🔧 CHANGE 2: cache-busting query string
+                : "";
+
+              const html = `
+                <div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; padding: 6px;">
+                  ${photoHtml}
+                  <strong>${props.address}</strong><br>
+                  <em>${props.jobType}</em><br>
+                  ${props.notes ? `<strong>Notes:</strong> ${props.notes}<br>` : ""}
+                  ${props.what3words ? `<strong>W3W:</strong> ${props.what3words}<br>` : ""}
+                </div>
+              `;
+
               infoWindow.setContent(html);
               infoWindow.open(map, marker);
             });
@@ -101,3 +119,4 @@
   </script>
 </body>
 </html>
+
