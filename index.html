@@ -56,10 +56,15 @@
 
             const id = props.address || `${feature.geometry.coordinates[1]},${feature.geometry.coordinates[0]}`;
 
-            // 🔧 CHANGE 1: If a marker already exists for this address,
-            // remove it so the new row is treated as a brand-new job
+            // Only replace marker if icon or photo has changed
             if (markers[id]) {
-              markers[id].map = null;
+              const existingMarker = markers[id];
+              if (existingMarker.photo === props.photo && existingMarker.content.textContent === (props.icon || "place")) {
+                // No changes — keep marker as-is
+                return;
+              }
+              // 🔧 Remove old marker before creating new one
+              existingMarker.map = null;
               delete markers[id];
             }
 
@@ -84,7 +89,7 @@
               const photoHtml = marker.photo
                 ? `<div style="margin-bottom: 8px;">
                      <img src="${marker.photo}?v=${Date.now()}" class="popup-img" alt="photo" style="max-width: 100%; border: 1px solid #ccc; border-radius: 4px;">
-                   </div>` // 🔧 CHANGE 2: cache-busting query string
+                   </div>`
                 : "";
 
               const html = `
@@ -108,9 +113,8 @@
         }
       }
 
-      // Initial fetch + refresh every 3 seconds
+      // Initial fetch only — no automatic 3-second refresh
       fetchUserJobs();
-      setInterval(fetchUserJobs, 3000);
     }
   </script>
 
